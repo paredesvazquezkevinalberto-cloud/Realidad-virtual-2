@@ -1,0 +1,365 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Práctica 2 - Modelo 3D</title>
+
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        #menu {
+            position: fixed;
+            bottom: 15px;
+            left: 10px;
+            right: 10px;
+            padding: 10px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        button {
+            padding: 8px;
+            margin: 3px;
+            border: none;
+            border-radius: 5px;
+            background: white;
+            color: black;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        #estado {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            padding: 10px;
+            z-index: 1000;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="estado">
+        Cargando modelo 3D...
+    </div>
+
+    <div id="menu">
+        <button onclick="ajustarTamano(0.8)">Reducir</button>
+        <button onclick="ajustarTamano(1.25)">Aumentar</button>
+        <button onclick="girarModelo()">Girar</button>
+        <button onclick="inclinarModelo()">Inclinar</button>
+        <button onclick="moverModelo(0.1)">Subir</button>
+        <button onclick="moverModelo(-0.1)">Bajar</button>
+        <button onclick="reiniciar()">Reiniciar</button>
+    </div>
+
+    <a-scene
+        embedded
+        vr-mode-ui="enabled: false"
+        arjs="sourceType: webcam; debugUIEnabled: false;">
+
+        <a-assets timeout="15000">
+
+            <a-asset-item
+                id="miModelo"
+                src="modelo.glb">
+            </a-asset-item>
+
+        </a-assets>
+
+        <a-marker id="marcadorHiro" preset="hiro">
+
+            <a-entity id="contenedor">
+
+                <a-entity
+                    id="arbol"
+                    gltf-model="#miModelo"
+                    scale="0.5 0.5 0.5"
+                    position="0 0 0"
+                    rotation="0 0 0">
+                </a-entity>
+
+            </a-entity>
+
+            <a-text
+                id="texto"
+                value="&#161;Mi primera AR!"
+                align="center"
+                color="#FFFFFF"
+                position="0 1.5 0"
+                scale="2 2 2">
+            </a-text>
+
+        </a-marker>
+
+        <a-marker id="marcadorKanji" preset="kanji">
+
+            <a-cylinder
+                position="0 0.5 0"
+                radius="0.35"
+                height="1"
+                color="#2196F3"
+                rotation="0 0 0"
+                animation="property: rotation; to: 0 360 0; dur: 4000; loop: true; easing: linear">
+
+                <a-box
+                    position="0.32 0 0"
+                    width="0.15"
+                    height="0.2"
+                    depth="0.15"
+                    color="#FFFFFF">
+                </a-box>
+
+            </a-cylinder>
+
+            <a-text
+                value="Marcador Kanji"
+                align="center"
+                color="#FFFFFF"
+                position="0 1.5 0"
+                scale="2 2 2">
+            </a-text>
+
+        </a-marker>
+
+        <a-entity
+            light="type: ambient; intensity: 0.8">
+        </a-entity>
+
+        <a-entity
+            light="type: directional; intensity: 0.7"
+            position="1 3 2">
+        </a-entity>
+
+        <a-entity camera></a-entity>
+
+    </a-scene>
+
+    <script>
+        const arbol = document.getElementById("arbol");
+        const contenedor = document.getElementById("contenedor");
+        const texto = document.getElementById("texto");
+        const estado = document.getElementById("estado");
+
+        const hiro = document.getElementById("marcadorHiro");
+        const kanji = document.getElementById("marcadorKanji");
+
+        let escala = 1;
+        let altura = 0;
+        let giro = 0;
+        let inclinacion = 0;
+
+        let modeloCargado = false;
+        let hiroVisible = false;
+        let kanjiVisible = false;
+
+        arbol.addEventListener("model-loaded", function () {
+
+            const objeto = arbol.getObject3D("mesh");
+
+            if (!objeto) {
+                return;
+            }
+
+            objeto.updateMatrixWorld(true);
+
+            const caja = new THREE.Box3().setFromObject(objeto);
+
+            const dimensiones = new THREE.Vector3();
+            const centro = new THREE.Vector3();
+
+            caja.getSize(dimensiones);
+            caja.getCenter(centro);
+
+            const dimensionMayor = Math.max(
+                dimensiones.x,
+                dimensiones.y,
+                dimensiones.z
+            );
+
+            if (!Number.isFinite(dimensionMayor) ||
+                dimensionMayor <= 0) {
+                estado.textContent = "El modelo no tiene dimensiones válidas.";
+                return;
+            }
+
+            const factor = 0.9 / dimensionMayor;
+
+            const padre = objeto.parent;
+
+            padre.updateMatrixWorld(true);
+
+            const centroLocal = padre.worldToLocal(
+                centro.clone()
+            );
+
+            const baseLocal = padre.worldToLocal(
+                new THREE.Vector3(
+                    centro.x,
+                    caja.min.y,
+                    centro.z
+                )
+            );
+
+            arbol.setAttribute(
+                "scale",
+                `${0.5 * factor} ${0.5 * factor} ${0.5 * factor}`
+            );
+
+            arbol.setAttribute(
+                "position",
+                `${-centroLocal.x * 0.5 * factor}
+                 ${-baseLocal.y * 0.5 * factor}
+                 ${-centroLocal.z * 0.5 * factor}`
+            );
+
+            modeloCargado = true;
+
+            actualizarEstado();
+        });
+
+        arbol.addEventListener("model-error", function () {
+            estado.textContent =
+                "No se pudo cargar modelo.glb. Revisa el archivo.";
+        });
+
+        hiro.addEventListener("markerFound", function () {
+            hiroVisible = true;
+            actualizarEstado();
+        });
+
+        hiro.addEventListener("markerLost", function () {
+            hiroVisible = false;
+            actualizarEstado();
+        });
+
+        kanji.addEventListener("markerFound", function () {
+            kanjiVisible = true;
+            actualizarEstado();
+        });
+
+        kanji.addEventListener("markerLost", function () {
+            kanjiVisible = false;
+            actualizarEstado();
+        });
+
+        function actualizarEstado() {
+
+            if (hiroVisible && kanjiVisible) {
+                estado.textContent = "Hiro y Kanji detectados";
+            } else if (kanjiVisible) {
+                estado.textContent = "Marcador Kanji detectado";
+            } else if (hiroVisible && modeloCargado) {
+                estado.textContent = "Marcador Hiro detectado";
+            } else if (!modeloCargado) {
+                estado.textContent = "Cargando modelo 3D...";
+            } else {
+                estado.textContent =
+                    "Apunta la cámara al marcador Hiro o Kanji";
+            }
+        }
+
+        function ajustarTamano(factor) {
+
+            escala = escala * factor;
+
+            escala = Math.max(
+                0.3,
+                Math.min(escala, 2)
+            );
+
+            contenedor.setAttribute(
+                "scale",
+                `${escala} ${escala} ${escala}`
+            );
+
+            actualizarTexto();
+        }
+
+        function girarModelo() {
+
+            giro = (giro + 45) % 360;
+
+            contenedor.setAttribute(
+                "rotation",
+                `${inclinacion} ${giro} 0`
+            );
+        }
+
+        function inclinarModelo() {
+
+            inclinacion = inclinacion === 0 ? -90 : 0;
+
+            contenedor.setAttribute(
+                "rotation",
+                `${inclinacion} ${giro} 0`
+            );
+        }
+
+        function moverModelo(cantidad) {
+
+            altura = altura + cantidad;
+
+            altura = Math.max(
+                -0.5,
+                Math.min(altura, 1)
+            );
+
+            contenedor.setAttribute(
+                "position",
+                `0 ${altura} 0`
+            );
+
+            actualizarTexto();
+        }
+
+        function actualizarTexto() {
+
+            const alturaTexto = Math.max(
+                0.5,
+                0.9 * escala + altura + 0.3
+            );
+
+            texto.setAttribute(
+                "position",
+                `0 ${alturaTexto} 0`
+            );
+        }
+
+        function reiniciar() {
+
+            escala = 1;
+            altura = 0;
+            giro = 0;
+            inclinacion = 0;
+
+            contenedor.setAttribute("scale", "1 1 1");
+            contenedor.setAttribute("position", "0 0 0");
+            contenedor.setAttribute("rotation", "0 0 0");
+
+            texto.setAttribute("position", "0 1.5 0");
+        }
+    </script>
+
+</body>
+</html>
